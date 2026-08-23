@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "wseubring.teleport",
+  "name": "Teleport",
+  "version": "1.0.0",
+  "author": "Wesley Seubring",
+  "license": "MIT",
+  "description": "Teleport (tsh) session state and active Kubernetes cluster in the Omarchy bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "TeleportPanel.qml"
+  },
+  "barWidget": {
+    "displayName": "Teleport",
+    "description": "Shows the active tsh Kubernetes cluster; click for a panel with session info and cluster switching. Logged out it is a lone icon that logs in via 1Password.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "left",
+    "defaults": {
+      "refreshIntervalSec": 30,
+      "useTerminal": false,
+      "nonProductionPattern": "(^|[-_])(dev|devel|develop|development|stag|staging|test|testing|demo|sandbox|acc|acceptance|qa|preview|local)([-_]|$)",
+      "loginCommand": "source ~/.config/bash/tsh-login.sh && tsh-login"
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 5,
+        "max": 3600,
+        "step": 5,
+        "defaultValue": 30
+      },
+      {
+        "key": "nonProductionPattern",
+        "type": "string",
+        "label": "Non-production cluster pattern (case-insensitive regex); anything else is treated as production",
+        "defaultValue": "(^|[-_])(dev|devel|develop|development|stag|staging|test|testing|demo|sandbox|acc|acceptance|qa|preview|local)([-_]|$)"
+      },
+      {
+        "key": "useTerminal",
+        "type": "boolean",
+        "label": "Log in in a floating terminal instead of silently via 1Password",
+        "defaultValue": false
+      },
+      {
+        "key": "loginCommand",
+        "type": "string",
+        "label": "Login command (floating terminal mode only)",
+        "defaultValue": "source ~/.config/bash/tsh-login.sh && tsh-login"
+      }
+    ]
+  }
+}

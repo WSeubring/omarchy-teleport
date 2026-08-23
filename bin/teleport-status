@@ -1,0 +1,52 @@
+#!/bin/bash
+# Report Teleport (tsh) session state as JSON for the Omarchy bar widget.
+#
+# States:
+#   off     - no profile / not logged in
+#   expired - profile exists but the cert has expired
+#   active  - valid session (cluster is the active Kubernetes cluster, if any)
+
+set -uo pipefail
+
+status_raw=$(tsh status 2>&1)
+# Drop ANSI colour codes so the parsing and tooltip stay clean.
+status=$(printf '%s' "$status_raw" | sed -e 's/\x1b\[[0-9;]*m//g')
+
+state="off"
+cluster=""
+user=""
+proxy=""
+roles=""
+valid_until=""
+valid_epoch=0
+
+if printf '%s' "$status" | grep -q '^> Profile URL:'; then
+  state="active"
+  user=$(printf '%s' "$status" | sed -n 's/^ *Logged in as: *//p' | head -1)
+  proxy=$(printf '%s' "$status" | sed -n 's/^ *Cluster: *//p' | head -1)
+  cluster=$(printf '%s' "$status" | sed -n 's/^ *Kubernetes cluster: *//p' | head -1 | tr -d '"')
+  roles=$(printf '%s' "$status" | sed -n 's/^ *Roles: *//p' | head -1)
+  valid_until=$(printf '%s' "$status" | sed -n 's/^ *Valid until: *//p' | head -1)
+
+  # "2026-08-14 22:37:59 +0200 CEST [EXPIRED]" -> epoch. Drop the zone name and
+  # the [EXPIRED] marker; the numeric offset is what date needs.
+  stamp=$(printf '%s' "$valid_until" | sed -e 's/ \[.*\]//' -e 's/\([+-][0-9]\{4\}\).*/\1/')
+  valid_epoch=$(date -d "$stamp" +%s 2>/dev/null || echo 0)
+
+  # `tsh status` exits 0 even on an expired profile, so detect it from the text.
+  if printf '%s' "$status" | grep -qi 'EXPIRED\|profile expired'; then
+    state="expired"
+  fi
+fi
+
+jq -c -n \
+  --arg state "$state" \
+  --arg cluster "$cluster" \
+  --arg user "$user" \
+  --arg proxy "$proxy" \
+  --arg roles "$roles" \
+  --arg validUntil "$valid_until" \
+  --argjson validEpoch "${valid_epoch:-0}" \
+  --arg status "$status" \
+  '{state: $state, cluster: $cluster, user: $user, proxy: $proxy, roles: $roles,
+    validUntil: $validUntil, validEpoch: $validEpoch, status: $status}'

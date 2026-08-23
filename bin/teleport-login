@@ -1,0 +1,18 @@
+#!/bin/bash
+# Log in to Teleport via 1Password, optionally selecting a kube cluster after.
+# With a cluster argument this is tsh-kube-login, so an expired cert is
+# re-authenticated before the cluster switch.
+
+set -uo pipefail
+
+# shellcheck source=/dev/null
+source "${TSH_LOGIN_SH:-$HOME/.config/bash/tsh-login.sh}" || {
+  echo "tsh-login.sh not found" >&2
+  exit 1
+}
+
+if [ -n "${1:-}" ]; then
+  tsh-kube-login "$1"
+else
+  tsh-login
+fi

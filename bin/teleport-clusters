@@ -1,0 +1,35 @@
+#!/bin/bash
+# List Teleport Kubernetes clusters as a JSON array for the bar widget panel:
+#   [{ "name": "rs-stag", "selected": true, "labels": "env=stag,team=infra" }, ...]
+#
+# Falls back to the plain-text table when `tsh kube ls -f json` is unavailable.
+
+set -uo pipefail
+
+raw=$(tsh kube ls -f json 2>/dev/null)
+
+if [ -n "$raw" ] && printf '%s' "$raw" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  printf '%s' "$raw" | jq -c '[.[] | {
+    name: (.kube_cluster_name // .name // .metadata.name // ""),
+    selected: (.selected // false),
+    labels: (
+      (.labels // .static_labels // {})
+      | to_entries
+      | map(select(.key | startswith("teleport.internal/") | not))
+      | map(select(.key != "name"))
+      | map("\(.key)=\(.value)")
+      | join(", ")
+    )
+  } | select(.name != "")]'
+  exit 0
+fi
+
+# Fallback: parse the human table ("Kube Cluster Name  Labels  Selected").
+tsh kube ls 2>/dev/null | sed -e 's/\x1b\[[0-9;]*m//g' | awk '
+  NR <= 2 { next }
+  NF == 0 { next }
+  {
+    selected = ($NF == "*") ? "true" : "false"
+    printf "{\"name\":\"%s\",\"selected\":%s,\"labels\":\"\"}\n", $1, selected
+  }
+' | jq -s -c '.'
