@@ -23,10 +23,15 @@ QtObject {
   property var clusters: []
   property bool clustersLoading: false
   property bool busy: false
+  // Cluster the pending switch targets, so its row can show the spinner.
+  property string pendingCluster: ""
   property string actionStatus: ""
   property string lastError: ""
 
   readonly property bool active: sessionState === "active"
+  // Terminal logins hand back straight away, so the relogin poll is what keeps
+  // the spinner up until the new session lands.
+  readonly property bool loggingIn: busy || relogin.running
   // Deny by default: a cluster is production unless its name says otherwise.
   readonly property string nonProductionPattern: settings && settings.nonProductionPattern
     ? settings.nonProductionPattern
@@ -80,6 +85,7 @@ QtObject {
     if (busy) return
     actionStatus = "Logging in…"
     lastError = ""
+    pendingCluster = cluster || ""
     busy = true
     if (useTerminal) {
       loginProc.command = ["omarchy-launch-floating-terminal-with-presentation", "bash", "-lc", loginCommand]
@@ -92,6 +98,7 @@ QtObject {
 
   function logout() {
     actionStatus = "Logging out…"
+    pendingCluster = ""
     busy = true
     run("tsh logout")
     Qt.callLater(refresh)
@@ -103,6 +110,7 @@ QtObject {
     if (!name || busy) return
     actionStatus = "Switching to " + name + "…"
     lastError = ""
+    pendingCluster = name
     busy = true
     kubeLoginProc.command = [script("teleport-login"), name]
     kubeLoginProc.running = true
@@ -192,6 +200,7 @@ QtObject {
     }
     onExited: function (exitCode) {
       root.busy = false
+      root.pendingCluster = ""
       root.actionStatus = exitCode === 0 ? "" : "Cluster switch failed"
       if (exitCode !== 0) root.notify("Cluster switch failed", root.lastError)
       root.refresh()
@@ -207,6 +216,7 @@ QtObject {
     }
     onExited: function (exitCode) {
       root.busy = false
+      root.pendingCluster = ""
       if (root.useTerminal) return
       if (exitCode === 0) {
         root.actionStatus = ""
@@ -228,6 +238,7 @@ QtObject {
     id: actionProc
     onExited: {
       root.busy = false
+      root.pendingCluster = ""
       root.refresh()
     }
   }

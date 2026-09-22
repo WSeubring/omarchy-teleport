@@ -122,12 +122,13 @@ Panel {
     text: root.vertical || !teleport.active
       ? "󱃾"
       : "󱃾  " + root.barLabel + (teleport.onProduction ? "  󰀦" : "")
+    labelVisible: !teleport.loggingIn
     // Urgent while on a production cluster, or when the session runs out.
     active: teleport.expiringSoon || teleport.onProduction
     dimmed: !teleport.active && !teleport.busy
     fontSize: Style.font.caption
-    tooltipText: teleport.busy
-      ? "Teleport: logging in…"
+    tooltipText: teleport.loggingIn
+      ? "Teleport: " + (teleport.actionStatus !== "" ? teleport.actionStatus : "Working…")
       : teleport.active
         ? (teleport.onProduction ? "Teleport: PRODUCTION — " : "Teleport: ")
           + root.barLabel + " · " + teleport.remainingText
@@ -137,6 +138,13 @@ Panel {
       else if (b === Qt.MiddleButton) teleport.copyText(teleport.cluster)
       else if (!teleport.active) teleport.login()
       else root.toggle()
+    }
+
+    Spinner {
+      anchors.centerIn: parent
+      running: teleport.loggingIn
+      color: button.active ? root.urgent : root.foreground
+      fontSize: Style.font.caption
     }
   }
 
@@ -196,11 +204,25 @@ Panel {
             foreground: teleport.active && !teleport.onProduction ? root.foreground : root.urgent
             fontFamily: root.fontFamily
             iconComponent: Component {
-              Text {
-                text: teleport.onProduction ? "󰀦" : "󱃾"
-                color: teleport.active && !teleport.onProduction ? root.foreground : root.urgent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.display
+              Item {
+                implicitWidth: heroIcon.implicitWidth
+                implicitHeight: heroIcon.implicitHeight
+
+                Text {
+                  id: heroIcon
+                  visible: !teleport.loggingIn
+                  text: teleport.onProduction ? "󰀦" : "󱃾"
+                  color: teleport.active && !teleport.onProduction ? root.foreground : root.urgent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.display
+                }
+
+                Spinner {
+                  anchors.centerIn: heroIcon
+                  running: teleport.loggingIn
+                  color: teleport.active && !teleport.onProduction ? root.foreground : root.urgent
+                  fontSize: Style.font.display
+                }
               }
             }
 
@@ -302,6 +324,28 @@ Panel {
     }
   }
 
+  // Shared loading glyph: hidden unless running, so no stray rotating
+  // character is left behind once the action finishes.
+  component Spinner: Text {
+    id: spinner
+    property bool running: false
+    property real fontSize: Style.font.body
+
+    visible: running
+    text: "󰦖"
+    font.family: root.fontFamily
+    font.pixelSize: fontSize
+    horizontalAlignment: Text.AlignHCenter
+    verticalAlignment: Text.AlignVCenter
+
+    RotationAnimator on rotation {
+      running: spinner.running
+      from: 0; to: 360
+      duration: 800
+      loops: Animation.Infinite
+    }
+  }
+
   component ClusterRow: CursorSurface {
     id: clusterRow
     property var entry: null
@@ -310,6 +354,7 @@ Panel {
     readonly property string labels: entry ? String(entry.labels || "") : ""
     readonly property bool isCurrent: name !== "" && name === teleport.cluster
     readonly property bool isProduction: teleport.isProduction(name)
+    readonly property bool isPending: name !== "" && name === teleport.pendingCluster
 
     hasCursor: root.cursorActive && root.clusterIndex === rowIndex
     current: isCurrent
@@ -337,12 +382,26 @@ Panel {
       anchors.rightMargin: Style.space(10)
       spacing: Style.space(8)
 
-      Text {
-        text: clusterRow.isCurrent ? "󰄬" : (clusterRow.isProduction ? "󰀦" : "󱃾")
-        color: clusterRow.isProduction ? root.urgent : (clusterRow.isCurrent ? root.foreground : root.dim)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.icon
+      Item {
+        implicitWidth: rowIcon.implicitWidth
+        implicitHeight: rowIcon.implicitHeight
         Layout.alignment: Qt.AlignVCenter
+
+        Text {
+          id: rowIcon
+          visible: !clusterRow.isPending
+          text: clusterRow.isCurrent ? "󰄬" : (clusterRow.isProduction ? "󰀦" : "󱃾")
+          color: clusterRow.isProduction ? root.urgent : (clusterRow.isCurrent ? root.foreground : root.dim)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.icon
+        }
+
+        Spinner {
+          anchors.centerIn: rowIcon
+          running: clusterRow.isPending
+          color: clusterRow.isProduction ? root.urgent : root.foreground
+          fontSize: Style.font.icon
+        }
       }
 
       ColumnLayout {
